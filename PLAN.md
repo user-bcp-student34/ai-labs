@@ -13,7 +13,7 @@ pruebas al elaborar este plan.
 ### Aprobación humana
 
 La persona usuaria de esta conversación autorizó explícitamente el alcance de
-H-AUTH-01 a H-AUTH-08 y sus criterios de aceptación el 2026-10-26, solicitando
+H-AUTH-01 a H-AUTH-12 y sus criterios de aceptación el 2026-10-26, solicitando
 que esta aprobación quedara registrada aquí. No se proporcionó nombre ni rol,
 por lo que no se atribuye identidad adicional ni se presenta como una revisión
 independiente. Esta aprobación no sustituye las coordinaciones de compatibilidad
@@ -395,3 +395,15 @@ configurarse externamente. No se leyó ni modificó código fuera de `auth/`.
   0 fallos, 0 errores, 0 omitidas; JaCoCo informó “All coverage checks have
   been met.” y Maven terminó en BUILD SUCCESS. `git diff --check` desde la
   raíz: PASS.
+
+### H-AUTH-01 — caracterización del contrato — 2026-10-27
+
+- Desde `auth/`, `mvn -B -ntp verify`: BUILD SUCCESS, 32 pruebas, 0 fallos,
+  0 errores y 0 omitidas. JaCoCo informó “All coverage checks have been met.”
+- `AuthResourceTest` contiene pruebas HTTP para éxito y los estados observados
+  400, 401 y 500 controlado; las pruebas verifican campos/estructura sin
+  registrar ni comparar valores de tokens.
+- No fue necesario modificar código ni pruebas: la caracterización del alcance
+  aprobado ya está presente. H-AUTH-01 permanece **Pendiente** hasta que los
+  consumidores confirmen el contrato; la ejecución local no constituye esa
+  confirmación.

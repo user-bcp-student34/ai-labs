@@ -59,3 +59,30 @@ inspección estática y H-AUTH-08 como pendiente de análisis SCA; también dej�
 pendiente contrastar el contrato externo y advirtió que no se habían ejecutado
 pruebas. Se conservan esos IDs y esas conclusiones en la matriz actual, que usa
 “Pendiente” como estado inicial solicitado para el seguimiento.
+
+
+### AUTH Discovery Analysis
+
+- H-AUTH-10: Diferencia temporal entre usuario existente e inexistente
+Estado: CANDIDATO
+Evidencia: AuthService.java:25 omite la verificación PBKDF2 si no encuentra el usuario; PasswordHasher.java:15 fija 310.000 iteraciones. Ambos flujos pueden terminar como 401: AuthResource.java:66-67.
+Impacto: Las diferencias de latencia podrían permitir inferir si un nombre de usuario existe.
+Prioridad propuesta: Media.
+Contrato potencialmente afectado: Privacidad y comportamiento observable de POST /auth/login.
+Cómo validarlo: Medir repetidamente, en entorno autorizado y controlado, la latencia para usuario existente con contraseña incorrecta y para usuario inexistente; confirmar también que ambos reciben el mismo estado y estructura de respuesta.
+
+- H-AUTH-11: Campo debug fijo en la respuesta exitosa
+Estado: CANDIDATO
+Evidencia: AuthService.java:12 define un marcador fijo y AuthService.java:33-37 lo incluye al construir la respuesta; el campo forma parte de LoginResponse.java:3.
+Impacto: Expone un indicador interno del flujo en cada login exitoso y puede fijar accidentalmente un detalle de implementación en el contrato público.
+Prioridad propuesta: Baja.
+Contrato potencialmente afectado: Campos de la respuesta exitosa de POST /auth/login.
+Cómo validarlo: Confirmar con los consumidores si el campo es requerido y probar que la respuesta contiene únicamente los campos acordados.
+
+- H-AUTH-12: Emisor y audiencia del JWT no están declarados explícitamente
+Estado: CANDIDATO
+Evidencia: TokenService.java:44-49 configura sub, role, iat y exp, sin declarar explícitamente emisor ni audiencia.
+Impacto: Si los consumidores requieren validar emisor o audiencia, el token podría no satisfacer ese contrato. La HU no confirma ese requisito.
+Prioridad propuesta: Baja, pendiente de confirmar las expectativas de los consumidores.
+Contrato potencialmente afectado: Claims del JWT y validación del token en consumidores externos.
+Cómo validarlo: Contrastar la configuración de validación de los consumidores con los claims emitidos y acordar si se requieren emisor o audiencia antes de definir una prueba de contrato.
