@@ -13,7 +13,7 @@ pruebas al elaborar este plan.
 ### Aprobación humana
 
 La persona usuaria de esta conversación autorizó explícitamente el alcance de
-H-AUTH-01 a H-AUTH-08 y sus criterios de aceptación el 2026-10-26, solicitando
+H-AUTH-01 a H-AUTH-12 y sus criterios de aceptación el 2026-10-26, solicitando
 que esta aprobación quedara registrada aquí. No se proporcionó nombre ni rol,
 por lo que no se atribuye identidad adicional ni se presenta como una revisión
 independiente. Esta aprobación no sustituye las coordinaciones de compatibilidad
