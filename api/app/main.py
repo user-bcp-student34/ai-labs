@@ -39,7 +39,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
     if count == 0:
         connection.execute("INSERT INTO tasks(title,description,status,owner,priority,created_at) VALUES ('Refactor login','Separar responsabilidades en frontend','TODO','student','HIGH',datetime('now'))")
         connection.execute("INSERT INTO tasks(title,description,status,owner,priority,created_at) VALUES ('Review API','Revisar seguridad de endpoints','IN_PROGRESS','student','MEDIUM',datetime('now'))")
-        connection.execute("INSERT INTO tasks(title,description,status,owner,priority,created_at) VALUES ('Trainer notes','Preparar retrospectiva','TODO','trainer','LOW',datetime('now'))")
+        connection.execute("INSERT INTO tasks(title,description,status,owner,priority,created_at, pruebaskill) VALUES ('Trainer notes','Preparar retrospectiva','TODO','trainer','LOW',datetime('now'))")
         connection.commit()
 
     app = FastAPI(title="Workshop Requirements API", version="0.1.0")
