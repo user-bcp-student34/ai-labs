@@ -60,7 +60,6 @@ pendiente contrastar el contrato externo y advirtió que no se habían ejecutado
 pruebas. Se conservan esos IDs y esas conclusiones en la matriz actual, que usa
 “Pendiente” como estado inicial solicitado para el seguimiento.
 
-
 ### AUTH Discovery Analysis
 
 - H-AUTH-10: Diferencia temporal entre usuario existente e inexistente
@@ -86,3 +85,4 @@ Impacto: Si los consumidores requieren validar emisor o audiencia, el token podr
 Prioridad propuesta: Baja, pendiente de confirmar las expectativas de los consumidores.
 Contrato potencialmente afectado: Claims del JWT y validación del token en consumidores externos.
 Cómo validarlo: Contrastar la configuración de validación de los consumidores con los claims emitidos y acordar si se requieren emisor o audiencia antes de definir una prueba de contrato.
+
