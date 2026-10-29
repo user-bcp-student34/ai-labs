@@ -16,18 +16,20 @@ externo acordado.
 | `GET /q/health` | Health disponible | Camino feliz | HTTP 200, `Content-Type: application/json`, `status` igual a `UP`. PASS |
 | `GET /q/health` | No hay health checks registrados | Borde | HTTP 200 y `checks` vacío. PASS |
 | `GET /q/health` | Estado DOWN | Error | HTTP 503 está descrito por la extensión, pero auth no registra health checks que lo provoquen. Pendiente; no se fabricó una condición DOWN solo para aprobar el test. |
-| `POST /auth/login` | Credenciales de laboratorio válidas y `client` presente | Camino feliz | HTTP 200; usuario, rol, expiración, indicador y token no nulo. PASS |
-| `POST /auth/login` | Campo opcional `client` omitido | Borde | HTTP 200 y token emitido. PASS |
+| `POST /auth/login` | Credenciales de laboratorio válidas y `client` presente | Camino feliz | HTTP 200, `Content-Type: application/json`, usuario, rol, expiración, indicador y token no vacío. PASS |
+| `POST /auth/login` | Campo opcional `client` omitido | Borde | HTTP 200, `Content-Type: application/json` y los mismos campos de éxito; token no vacío. PASS |
 | `POST /auth/login` | Username solo con espacios | Borde | HTTP 400; `{"message":"Username is required"}`. PASS |
 | `POST /auth/login` | Contraseña con comilla como dato | Borde | HTTP 401; no altera la consulta. PASS |
 | `POST /auth/login` | Cuerpo JSON `null` | Error | HTTP 400; `{"message":"Request is null"}`. PASS |
 | `POST /auth/login` | Username ausente | Error | HTTP 400; `{"message":"Username is required"}`. PASS |
+| `POST /auth/login` | Username explícitamente `null` | Error | HTTP 400; `{"message":"Username is required"}`. PASS |
 | `POST /auth/login` | Username vacío/blanco | Error | HTTP 400; `{"message":"Username is required"}`. PASS |
 | `POST /auth/login` | Password ausente | Error | HTTP 400; `{"message":"Password is required"}`. PASS |
+| `POST /auth/login` | Password explícitamente `null` | Error | HTTP 400; `{"message":"Password is required"}`. PASS |
 | `POST /auth/login` | Password vacío/blanco | Error | HTTP 400; `{"message":"Password is required"}`. PASS |
 | `POST /auth/login` | Credenciales inválidas | Error | HTTP 401; mensaje `Invalid user student or password`. PASS |
 | `POST /auth/login` | Origen CORS no configurado | Error | HTTP 403 y sin header `Access-Control-Allow-Origin`. El cuerpo no forma parte del contrato comprobado. PASS |
-| `POST /auth/login` | Excepción controlada del servicio | Error | HTTP 500; cuerpo genérico `message: Internal server error`, `exception: INTERNAL_ERROR`. PASS |
+| `POST /auth/login` | Excepción controlada del servicio | Error | HTTP 500; cuerpo genérico `message: Internal server error`, `exception: INTERNAL_ERROR`; el detalle interno no se expone. PASS |
 | `POST /auth/login` | JSON malformado o `Content-Type` no soportado | Error del servidor HTTP | El cuerpo y el status del parser/framework están sin especificar en `docs/ENDPOINTS.md`; pendiente de caracterización. |
 
 ### Código de pruebas añadidas
@@ -66,8 +68,14 @@ void logsInWithoutOptionalClientField() {
             .when().post("/auth/login")
             .then()
             .statusCode(200)
+            .contentType("application/json")
             .body("user.username", is("student"))
-            .body("token", notNullValue());
+            .body("user.displayName", is("Workshop Student"))
+            .body("user.role", is("STUDENT"))
+            .body("expiresIn", is(3600))
+            .body("debug", is("authenticated-with-legacy-flow"))
+            .body("token", notNullValue())
+            .body("token", not(is("")));
 }
 
 @Test
@@ -81,6 +89,17 @@ void rejectsBlankUsername() {
             .body("message", is("Username is required"));
 }
 
+      @Test
+      void rejectsNullUsername() {
+        given()
+            .contentType("application/json")
+            .body("{\"username\":null,\"password\":\"Workshop123!\"}")
+            .when().post("/auth/login")
+            .then()
+            .statusCode(400)
+            .body("message", is("Username is required"));
+      }
+
 @Test
 void rejectsMissingPassword() {
     given()
@@ -91,6 +110,17 @@ void rejectsMissingPassword() {
             .statusCode(400)
             .body("message", is("Password is required"));
 }
+
+      @Test
+      void rejectsNullPassword() {
+        given()
+            .contentType("application/json")
+            .body("{\"username\":\"student\",\"password\":null}")
+            .when().post("/auth/login")
+            .then()
+            .statusCode(400)
+            .body("message", is("Password is required"));
+      }
 
 @Test
 void returnsGenericErrorWhenAuthenticationServiceFailsOverHttp() {
@@ -109,7 +139,8 @@ void returnsGenericErrorWhenAuthenticationServiceFailsOverHttp() {
             .then()
             .statusCode(500)
             .body("message", is("Internal server error"))
-            .body("exception", is("INTERNAL_ERROR"));
+            .body("exception", is("INTERNAL_ERROR"))
+            .body(not(containsString("sensitive internal detail")));
 }
 ```
 
@@ -129,7 +160,9 @@ respuesta HTTP serializada.
 | componente e IDs | directorio | comando | código de salida | resultado |
 |---|---|---|---:|---|
 | auth; contrato de login y hallazgos `H-AUTH-01` a `H-AUTH-07`, `H-AUTH-09` | `auth/` | `mvn -B -ntp -Dtest=AuthResourceTest test` | 0 | PASS; 17 pruebas, 0 fallos, 0 errores, 0 omitidas. |
+| auth; caracterización HTTP del Issue #26 | `auth/` | `mvn -B -ntp -Dtest=AuthResourceTest test` | 0 | PASS; baseline 17/17 antes de editar; después de caracterizar username/password null, respuestas de éxito completas, 500 sin detalle interno y revisar 401/CORS: 19 pruebas, 0 fallos, 0 errores, 0 omitidas. |
 | auth; regresión `H-AUTH-02` a `H-AUTH-07`, `H-AUTH-09` | `auth/` | `mvn -B -ntp verify` | 0 | PASS; 32 pruebas, 0 fallos, 0 errores, 0 omitidas; `jacoco:check` PASS. H-AUTH-08 SCA no forma parte de esta ejecución Maven. |
+| auth; validación final del Issue #26 | `auth/` | `mvn -B -ntp verify` | 0 | PASS; 34 pruebas, 0 fallos, 0 errores, 0 omitidas; JaCoCo informa que se cumplieron todos los checks de cobertura. No se imprimieron tokens ni secretos. |
 
 **Método de medición:** JaCoCo 0.8.12, contador de líneas
 (`LINE_COVERED / (LINE_COVERED + LINE_MISSED)`) desde

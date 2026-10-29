@@ -18,7 +18,9 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.notNullValue;
 
@@ -53,12 +55,14 @@ class AuthResourceTest {
                 .when().post("/auth/login")
                 .then()
                 .statusCode(200)
+                .contentType("application/json")
                 .body("user.username", is("student"))
                 .body("user.displayName", is("Workshop Student"))
                 .body("user.role", is("STUDENT"))
                 .body("expiresIn", is(3600))
                 .body("debug", is("authenticated-with-legacy-flow"))
-                .body("token", notNullValue());
+                .body("token", notNullValue())
+                .body("token", not(is("")));
     }
 
     @Test
@@ -69,8 +73,14 @@ class AuthResourceTest {
                 .when().post("/auth/login")
                 .then()
                 .statusCode(200)
+                .contentType("application/json")
                 .body("user.username", is("student"))
-                .body("token", notNullValue());
+                .body("user.displayName", is("Workshop Student"))
+                .body("user.role", is("STUDENT"))
+                .body("expiresIn", is(3600))
+                .body("debug", is("authenticated-with-legacy-flow"))
+                .body("token", notNullValue())
+                .body("token", not(is("")));
     }
 
     @Test
@@ -96,6 +106,17 @@ class AuthResourceTest {
     }
 
     @Test
+    void rejectsNullUsername() {
+        given()
+                .contentType("application/json")
+                .body("{\"username\":null,\"password\":\"Workshop123!\"}")
+                .when().post("/auth/login")
+                .then()
+                .statusCode(400)
+                .body("message", is("Username is required"));
+    }
+
+    @Test
     void rejectsBlankUsername() {
         given()
                 .contentType("application/json")
@@ -111,6 +132,17 @@ class AuthResourceTest {
         given()
                 .contentType("application/json")
                 .body("{\"username\":\"student\"}")
+                .when().post("/auth/login")
+                .then()
+                .statusCode(400)
+                .body("message", is("Password is required"));
+    }
+
+    @Test
+    void rejectsNullPassword() {
+        given()
+                .contentType("application/json")
+                .body("{\"username\":\"student\",\"password\":null}")
                 .when().post("/auth/login")
                 .then()
                 .statusCode(400)
@@ -177,7 +209,8 @@ class AuthResourceTest {
                 .then()
                 .statusCode(500)
                 .body("message", is("Internal server error"))
-                .body("exception", is("INTERNAL_ERROR"));
+                .body("exception", is("INTERNAL_ERROR"))
+                .body(not(containsString("sensitive internal detail")));
     }
 
     @Test
