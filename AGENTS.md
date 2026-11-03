@@ -82,3 +82,14 @@ En el Dia 1 usa solo ramas locales: day1/prompting, main y checkpoint/day1. Cons
     `login()` hoy); usar retorno anticipado o condiciones combinadas.
 12. Sin valores "mágicos" sueltos en el código (URLs, claves de
     `localStorage`); centralizarlos en un solo lugar.
+
+## auth
+
+1. Analiza el flujo completo antes de cambiar autenticación.
+2. Conserva el contrato de POST /auth/login.
+3. Crea pruebas de caracterización antes de refactorizar persistencia o token.
+4. No silencies CodeQL, Dependency Review ni JaCoCo.
+5. No agregues secretos reales; usa variables de entorno y datos de prueba aislados.
+6. Separa API, servicio, repositorio y seguridad en cambios revisables.
+7. Meta de cobertura del código modificado: 85% o superior.
+   Distingue cobertura global y del cambio; declara el método y sus límites.

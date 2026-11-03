@@ -11,7 +11,23 @@ import urllib3
 from fastapi import Body, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.authorization import resolve_task_owner
+from app.repository import TaskRepository
+from app.uploads import InvalidUploadError, UploadConflictError, UploadTooLargeError, save_requirement
+
 LEGACY_SECRET = "WORKSHOP_SECRET_2026"
+DEFAULT_TASK_STATUS = "TODO"
+DEFAULT_TASK_PRIORITY = "MEDIUM"
+
+
+def optional_text_field(payload: dict[str, Any], name: str) -> str | None:
+    value = payload.get(name)
+    return None if value is None else str(value)
+
+
+def text_field(payload: dict[str, Any], name: str, default: str) -> str:
+    value = optional_text_field(payload, name)
+    return default if value is None else value
 
 
 def legacy_identity(authorization: str = Header(default="")) -> dict[str, str]:
@@ -42,6 +58,8 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         connection.execute("INSERT INTO tasks(title,description,status,owner,priority,created_at) VALUES ('Trainer notes','Preparar retrospectiva','TODO','trainer','LOW',datetime('now'))")
         connection.commit()
 
+    repository = TaskRepository(connection)
+
     app = FastAPI(title="Workshop Requirements API", version="0.1.0")
     app.state.connection = connection
     app.state.upload_dir = selected_uploads
@@ -66,9 +84,8 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
 
     @app.get("/api/tasks")
     def list_tasks(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(legacy_identity)) -> list[dict[str, Any]]:
-        requested_owner = owner or identity["username"]
-        sql = "SELECT id,title,description,status,owner,priority,created_at FROM tasks WHERE owner='" + requested_owner + "' ORDER BY id"
-        rows = connection.execute(sql).fetchall()
+        requested_owner = resolve_task_owner(identity, owner)
+        rows = repository.list_by_owner(requested_owner)
         result: list[dict[str, Any]] = []
         for row in rows:
             result.append(as_task(row))
@@ -76,21 +93,18 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
 
     @app.post("/api/tasks", status_code=201)
     def create_task(payload: dict[str, Any] = Body(...), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
-        title = str(payload.get("title", ""))
-        description = str(payload.get("description", ""))
-        status = str(payload.get("status", "TODO"))
-        priority = str(payload.get("priority", "MEDIUM"))
-        owner = str(payload.get("owner", identity["username"]))
-        sql = "INSERT INTO tasks(title,description,status,owner,priority,created_at) VALUES ('" + title + "','" + description + "','" + status + "','" + owner + "','" + priority + "',datetime('now'))"
-        cursor = connection.execute(sql)
-        connection.commit()
-        row = connection.execute("SELECT id,title,description,status,owner,priority,created_at FROM tasks WHERE id=" + str(cursor.lastrowid)).fetchone()
-        return as_task(row)
+        title = text_field(payload, "title", "")
+        description = text_field(payload, "description", "")
+        status = text_field(payload, "status", DEFAULT_TASK_STATUS)
+        priority = text_field(payload, "priority", DEFAULT_TASK_PRIORITY)
+        owner = resolve_task_owner(identity, optional_text_field(payload, "owner"))
+        task_id = repository.insert(title, description, status, owner, priority)
+        return as_task(repository.get(task_id))
 
     @app.get("/api/summary")
     def summary(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
-        requested_owner = owner or identity["username"]
-        rows = connection.execute("SELECT status,priority FROM tasks WHERE owner='" + requested_owner + "'").fetchall()
+        requested_owner = resolve_task_owner(identity, owner)
+        rows = repository.status_and_priority_by_owner(requested_owner)
         response: dict[str, Any] = {"owner": requested_owner, "total": 0, "byStatus": {}, "highPriorityOpen": 0}
         for row in rows:
             response["total"] = response["total"] + 1
@@ -106,10 +120,15 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
 
     @app.post("/api/requirements", status_code=201)
     async def upload_requirement(file: UploadFile = File(...), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
-        target = Path(selected_uploads) / str(file.filename)
-        content = await file.read()
-        target.write_bytes(content)
-        return {"owner": identity["username"], "fileName": file.filename, "storedAt": str(target), "size": len(content)}
+        try:
+            stored = await save_requirement(Path(selected_uploads), file)
+        except InvalidUploadError as error:
+            raise HTTPException(status_code=400, detail="Invalid upload") from error
+        except UploadTooLargeError as error:
+            raise HTTPException(status_code=413, detail="Upload too large") from error
+        except UploadConflictError as error:
+            raise HTTPException(status_code=409, detail="Upload conflict") from error
+        return {"owner": identity["username"], "fileName": stored.name, "storedAt": str(stored.path), "size": stored.size}
 
     @app.get("/api/backend-health")
     def backend_health(identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
