@@ -114,8 +114,8 @@ Si el owner no tiene tareas, la respuesta es `200` con `[]`.
 
 | Código | Cuándo | Ejemplo de cuerpo |
 |---|---|---|
-| 401 | Falta la cabecera, el token no es Base64 válido, no tiene 4 campos, el secreto no coincide o está expirado. | `{"detail": "Invalid token: invalid token"}` |
-| 401 | Cabecera con texto que no es Base64 válido (por ejemplo `Authorization: invalid`). | `{"detail": "Invalid token: Incorrect padding"}` |
+| 401 | Falta la cabecera, el token no es Base64 válido, no tiene 4 campos, el secreto no coincide o está expirado. | `{"detail": "Invalid token"}` |
+| 401 | Cabecera con texto que no es Base64 válido (por ejemplo `Authorization: invalid`). | `{"detail": "Invalid token"}` |
 | 403 | `owner` distinto del usuario del token. | `{"detail": "Forbidden"}` |
 
 El texto después de `Invalid token: ` es el mensaje de la excepción interna. Ver H-API-10.

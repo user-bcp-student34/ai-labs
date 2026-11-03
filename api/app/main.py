@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import base64
 import os
 import sqlite3
-import time
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +11,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.authorization import resolve_task_owner
 from app.repository import TaskRepository
+from app.security import verify_authorization
+from app.settings import TokenSettings, load_token_settings
 from app.uploads import InvalidUploadError, UploadConflictError, UploadTooLargeError, save_requirement
 
-LEGACY_SECRET = "WORKSHOP_SECRET_2026"
 DEFAULT_TASK_STATUS = "TODO"
 DEFAULT_TASK_PRIORITY = "MEDIUM"
 
@@ -30,19 +29,8 @@ def text_field(payload: dict[str, Any], name: str, default: str) -> str:
     return default if value is None else value
 
 
-def legacy_identity(authorization: str = Header(default="")) -> dict[str, str]:
-    try:
-        token = authorization.replace("Bearer ", "")
-        decoded = base64.b64decode(token).decode("utf-8")
-        parts = decoded.split("|")
-        if len(parts) != 4 or parts[3] != LEGACY_SECRET or int(parts[2]) < int(time.time()):
-            raise ValueError("invalid token")
-        return {"username": parts[0], "role": parts[1]}
-    except Exception as error:
-        raise HTTPException(status_code=401, detail="Invalid token: " + str(error)) from error
-
-
-def create_app(db_path: str | None = None, upload_dir: str | None = None) -> FastAPI:
+def create_app(db_path: str | None = None, upload_dir: str | None = None, token_settings: TokenSettings | None = None) -> FastAPI:
+    selected_tokens = token_settings or load_token_settings()
     selected_db = db_path or os.getenv("WORKSHOP_DB_PATH", "./data/workshop.db")
     selected_uploads = upload_dir or os.getenv("WORKSHOP_UPLOAD_DIR", "./uploads")
     Path(selected_db).parent.mkdir(parents=True, exist_ok=True)
@@ -71,6 +59,9 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         allow_headers=["*"],
     )
 
+    def authenticated_identity(authorization: str = Header(default="")) -> dict[str, str]:
+        return verify_authorization(authorization, selected_tokens)
+
     def as_task(row: sqlite3.Row) -> dict[str, Any]:
         return {
             "id": row["id"],
@@ -83,7 +74,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         }
 
     @app.get("/api/tasks")
-    def list_tasks(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(legacy_identity)) -> list[dict[str, Any]]:
+    def list_tasks(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(authenticated_identity)) -> list[dict[str, Any]]:
         requested_owner = resolve_task_owner(identity, owner)
         rows = repository.list_by_owner(requested_owner)
         result: list[dict[str, Any]] = []
@@ -92,7 +83,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         return result
 
     @app.post("/api/tasks", status_code=201)
-    def create_task(payload: dict[str, Any] = Body(...), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
+    def create_task(payload: dict[str, Any] = Body(...), identity: dict[str, str] = Depends(authenticated_identity)) -> dict[str, Any]:
         title = text_field(payload, "title", "")
         description = text_field(payload, "description", "")
         status = text_field(payload, "status", DEFAULT_TASK_STATUS)
@@ -102,7 +93,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         return as_task(repository.get(task_id))
 
     @app.get("/api/summary")
-    def summary(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
+    def summary(owner: str | None = Query(default=None), identity: dict[str, str] = Depends(authenticated_identity)) -> dict[str, Any]:
         requested_owner = resolve_task_owner(identity, owner)
         rows = repository.status_and_priority_by_owner(requested_owner)
         response: dict[str, Any] = {"owner": requested_owner, "total": 0, "byStatus": {}, "highPriorityOpen": 0}
@@ -119,7 +110,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         return response
 
     @app.post("/api/requirements", status_code=201)
-    async def upload_requirement(file: UploadFile = File(...), identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
+    async def upload_requirement(file: UploadFile = File(...), identity: dict[str, str] = Depends(authenticated_identity)) -> dict[str, Any]:
         try:
             stored = await save_requirement(Path(selected_uploads), file)
         except InvalidUploadError as error:
@@ -131,7 +122,7 @@ def create_app(db_path: str | None = None, upload_dir: str | None = None) -> Fas
         return {"owner": identity["username"], "fileName": stored.name, "storedAt": str(stored.path), "size": stored.size}
 
     @app.get("/api/backend-health")
-    def backend_health(identity: dict[str, str] = Depends(legacy_identity)) -> dict[str, Any]:
+    def backend_health(identity: dict[str, str] = Depends(authenticated_identity)) -> dict[str, Any]:
         url = os.getenv("AUTH_HEALTH_URL", "http://localhost:8080/q/health")
         try:
             response = urllib3.PoolManager().request("GET", url, timeout=3.0)

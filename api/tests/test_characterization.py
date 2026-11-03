@@ -52,6 +52,13 @@ def test_expired_token_is_rejected(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+def test_token_expiring_exactly_now_is_accepted(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    now = 1_900_000_000
+    monkeypatch.setattr(time, "time", lambda: float(now))
+    response = client.get("/api/tasks", headers={"Authorization": f"Bearer {make_token(expires_at=now)}"})
+    assert response.status_code == 200
+
+
 def test_role_claim_does_not_change_own_task_list(client: TestClient) -> None:
     as_student = client.get("/api/tasks", headers=auth_headers("student", "STUDENT")).json()
     as_trainer_role = client.get("/api/tasks", headers=auth_headers("student", "TRAINER")).json()
